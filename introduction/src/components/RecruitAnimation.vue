@@ -1,10 +1,11 @@
 <!-- BanG Dream 招募动画 -->
 <template>
   <div ref="background" class="background"></div>
-  <div ref="whiteCover" class="white-cover"></div>
+  <div ref="whiteCover" class="white-cover" hidden></div>
 
   <video ref="videoPlayer"
     class="video-player"
+    hidden
   >
     <source ref="videoSource" src="" type="video/mp4">
     您的浏览器不支持HTML5视频播放。
@@ -49,7 +50,6 @@ export default {
   watch: {
     theme: {
       handler(newVal) {
-        console.log(newVal, THEMES[newVal]);
         if (THEMES[newVal]) {
           this.videoUrl = THEMES[newVal].video;
           this.audioUrl = THEMES[newVal].audio;
@@ -73,10 +73,12 @@ export default {
      */
     reset() {
       if (this.$refs.whiteCover) {
+        this.$refs.whiteCover.hidden = true;
         this.$refs.whiteCover.style.opacity = 0;
       }
 
       if (this.$refs.videoPlayer) {
+        this.$refs.videoPlayer.hidden = true;
         this.$refs.videoPlayer.pause();
         this.$refs.videoPlayer.style.opacity = 0;
         this.$refs.videoPlayer.currentTime = 0;
@@ -94,6 +96,12 @@ export default {
      */
     play() {
       // 将视频和音频进度调为最开始
+      if (this.$refs.videoPlayer) {
+        this.$refs.videoPlayer.hidden = false;
+      }
+      if (this.$refs.whiteCover) {
+        this.$refs.whiteCover.hidden = false;
+      }
       return new Promise((resolve) => {
         if (this.theme === 'random' || !THEMES[this.theme]) {
           const themeKeys = Object.keys(THEMES);
@@ -132,7 +140,6 @@ export default {
           if (this.$refs.videoPlayer) {
             this.$refs.videoPlayer.addEventListener('ended', () => {
               // 视频播放结束
-              // console.log(1);
               this.$refs.whiteCover.style.opacity = 1;
               setTimeout(() => {
                 this.$refs.videoPlayer.style.opacity = 0;

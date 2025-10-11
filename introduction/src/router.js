@@ -5,29 +5,35 @@ import IndexPage from './pages/IndexPage.vue'
 import Directors from './pages/Directors.vue'
 import LotteryOrdered from './pages/LotteryOrdered.vue'
 import LotteryRandom from './pages/LotteryRandom.vue'
+import Lottery from './pages/Lottery.vue'
 
 const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     {
-        path: '/directors',
-        name: 'directors',
-        component: Directors
+      path: '/directors',
+      name: 'directors',
+      component: Directors
     },
     {
-        path: '/lottery-random',
-        name: 'lottery-random',
-        component: LotteryRandom
+      path: '/lottery',
+      name: 'lottery',
+      component: Lottery
     },
     {
-        path: '/lottery-ordered',
-        name: 'lottery-ordered',
-        component: LotteryOrdered
+      path: '/lottery-random',
+      name: 'lottery-random',
+      component: LotteryRandom
     },
     {
-        path: '/',
-        name: 'index-page',
-        component: IndexPage
+      path: '/lottery-ordered',
+      name: 'lottery-ordered',
+      component: LotteryOrdered
+    },
+    {
+      path: '/',
+      name: 'index-page',
+      component: IndexPage
     }
   ]
 })

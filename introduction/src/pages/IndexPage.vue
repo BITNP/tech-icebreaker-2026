@@ -13,8 +13,9 @@
     <br>
     <div class="buttons-container">
       <button @click="goToDirectors" class="tech-button">部长介绍</button>
-      <button @click="goToLotteryOrdered" class="tech-button">部员介绍</button>
-      <button @click="goToLotteryRandom" class="tech-button">抽奖游戏</button>
+      <!-- <button @click="goToLotteryOrdered" class="tech-button">部员介绍</button>
+      <button @click="goToLotteryRandom" class="tech-button">抽奖游戏</button> -->
+      <button @click="goToLottery" class="tech-button">抽奖游戏</button>
     </div>
   </div>
 
@@ -43,6 +44,11 @@ export default {
     // 导航到抽奖游戏页面
     goToLotteryRandom() {
       window.location.hash = '/lottery-random';
+    },
+
+    goToLottery() {
+      // 新的抽奖界面
+      window.location.hash = '/lottery';
     }
   },
   mounted() {

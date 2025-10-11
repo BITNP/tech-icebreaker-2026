@@ -72,7 +72,6 @@ export default {
           console.log(`Error occurred when trying to parse lottery info as json.`, e);
 
           people = fileContent.split('\n').map((name) => {return {name: name}});
-          console.log({fileContent, people})
         }
 
         bank = [];
