@@ -3,7 +3,7 @@
   <div class="background"></div>
   <RecruitAnimation ref="bangLottery" style="width: 100vh; height: 100vw;" :theme="theme"/>
   <InfoDisplay ref="infoDisplay" :name="(typeof name === 'string') ? name : ''" :avatar-url="(typeof avatarUrl === 'string') ? avatarUrl : ''" :shumeiniang-image="shumeiniangImage"/>
-  <MultipleInfoDisplay ref="multiInfoDisplay" :name="name" :avatar-url="avatarUrl" :shumeiniang-image="shumeiniangImage"/>
+  <MultipleInfoDisplay ref="multiInfoDisplay" :name="Array.isArray(name) ? name : []" :avatar-url="Array.isArray(avatarUrl) ? avatarUrl : []" :shumeiniang-image="shumeiniangImage"/>
 
   <div class="ui-container" :hidden="!showUI">
     <div class="bank-title">抽奖名单</div>
