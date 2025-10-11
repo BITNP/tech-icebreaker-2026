@@ -12,7 +12,7 @@
         <button class="bank-tool-button" @click="uploadFile">导入文件</button>
         <button class="bank-tool-button" @click="downloadBank">导出名单</button>
         <button class="bank-tool-button" @click="clearBank">清空名单</button>
-        <button class="bank-tool-button" @click="pick">一发入魂</button>
+        <button class="bank-tool-button" @click="pick" style="background-color: pink;">一发入魂</button>
       </div>
       <div style="text-align: center; color: gray;">
         <input type="checkbox" v-model="autoRemove" id="autoRemoveCheckbox">
