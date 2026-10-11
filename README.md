@@ -116,7 +116,7 @@ _注意：共享画布需要公网 IP 才能使用户正常访问，最好部署
 
 抽卡动画那部分（`./introduction`）已经是"单二进制 + SQLite"的服务：Keycloak 登录、
 全站强制登录、RBAC 四角色、签到与抽奖都在一起。镜像由 GitHub Actions 构建并推送到
-`ghcr.io/bitnp/icebreaker`。
+`ghcr.io/bitnp/tech-icebreaker-2026`（镜像名跟仓库名走）。
 
 部署步骤、开演前检查与回滚方式见 [`./introduction/docs/deploy.md`](./introduction/docs/deploy.md)，
 设计与取舍见 [`./introduction/docs/design.md`](./introduction/docs/design.md)。

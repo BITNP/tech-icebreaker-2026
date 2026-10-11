@@ -9,7 +9,9 @@
 # 现场也可以不跑容器：直接 ./icebreaker -config config.yaml，一样是单文件 + SQLite。
 services:
   app:
-    image: ghcr.io/bitnp/icebreaker:latest
+    # 镜像名跟着仓库走：CI 用 ${GITHUB_REPOSITORY} 推送到这里。
+    # 生产建议 pin 到具体 sha（ghcr.io/bitnp/tech-icebreaker-2026:sha-xxxxxxx）。
+    image: ghcr.io/bitnp/tech-icebreaker-2026:latest
     build: .
     volumes:
       # 配置和数据库都在宿主机上，重建容器不丢签到名单。

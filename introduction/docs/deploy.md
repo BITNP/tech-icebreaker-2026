@@ -16,7 +16,8 @@
 ## 1. 镜像
 
 CI（`.github/workflows/build.yml`）在推送 main、打 `v*` tag 或手动触发时构建并推送到
-`ghcr.io/bitnp/icebreaker`，tag 包含 `latest`、分支名与 `sha-xxxxxxx`（生产建议 pin 到 sha）。
+`ghcr.io/bitnp/tech-icebreaker-2026`（镜像名跟仓库名走），tag 包含 `latest`、分支名与
+`sha-xxxxxxx`（生产建议 pin 到 sha）。
 
 本地构建也可以：
 
