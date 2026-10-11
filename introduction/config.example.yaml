@@ -1,0 +1,40 @@
+# icebreaker 现场抽奖：匿名签到 + Keycloak 管理台。
+#
+#   cp config.example.yaml config.yaml && $EDITOR config.yaml
+#
+# 必填项留空直接启动失败退出（不自动生成、不降级），现场失败要能立刻看见。
+
+server:
+  addr: ":8080"
+
+db:
+  # 签到名单、轮次、中奖结果都在这个文件里；部署时把 data/ 挂出来。
+  path: "data/icebreaker.db"
+
+auth:
+  # 必填：`openssl rand -base64 32` 生成后填这里。留空直接启动失败 ——
+  # 自动生成意味着每次重启旧 token 全失效，管理员当场重登。
+  hmac_secret: ""
+  token_ttl: 2h
+
+  # 管理员白名单：Keycloak 里管理员的 sub（不是用户名）。
+  # 只有这几个 sub 能碰管理接口；留空 = 谁都管理不了（fail closed，但会告警）。
+  # 取 sub 的办法：登录一次后看服务端日志，或让 Keycloak 管理员在用户详情页复制 ID。
+  admin_subs: []
+
+  oidc:
+    # 复用组织现有 Keycloak 的 master realm，只新建 client。
+    issuer: "https://<keycloak 地址>/realms/master"
+    client_id: "icebreaker"
+    client_secret: "..."
+    # 必须与 Keycloak client 里登记的 Valid redirect URI 完全一致；
+    # 现场局域网兜底方案要再登记一条对应地址。
+    redirect_url: "https://<现场访问地址>/auth/callback"
+    # 大屏与名单显示用的昵称来源：name，空则回退 preferred_username → sub。
+    display_name_claim: "name"
+
+# 入池时随机分配的主题与树莓娘图。留空用内置默认值（与前端素材一致的 8 / 5 个）。
+# 现场想换素材池时在这里改，前端不用动。
+draw:
+  themes: []
+  shumeiniang_images: []

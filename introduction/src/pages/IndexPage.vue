@@ -6,7 +6,7 @@
   <div style="position: fixed; width: 100vw; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center;">
     <div class="title-container">
       <h1 class="title">网络开拓者协会技术部破冰会</h1>
-      <p class="date">2025年9月</p>
+      <p class="date">2026年10月11日</p>
     </div>
     <br>
     <br>
@@ -15,6 +15,7 @@
       <button @click="goToDirectors" class="tech-button">部长介绍</button>
       <!-- <button @click="goToLotteryOrdered" class="tech-button">部员介绍</button>
       <button @click="goToLotteryRandom" class="tech-button">抽奖游戏</button> -->
+      <button @click="goToCheckin" class="tech-button">现场签到</button>
       <button @click="goToLottery" class="tech-button">抽奖游戏</button>
     </div>
   </div>
@@ -49,6 +50,11 @@ export default {
     goToLottery() {
       // 新的抽奖界面
       window.location.hash = '/lottery';
+    },
+
+    // 签到页（扫码进来的也是这个页面）
+    goToCheckin() {
+      window.location.hash = '/checkin';
     }
   },
   mounted() {

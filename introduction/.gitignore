@@ -1,23 +1,14 @@
-.DS_Store
-node_modules
-/dist
+node_modules/
+bun.lock
 
+# 前端构建产物不入库；只留 .gitkeep 让 go:embed 在未构建时也能编译
+dist/*
+!dist/.gitkeep
 
-# local env files
-.env.local
-.env.*.local
+# 现场配置与数据（含 hmac_secret、client_secret，绝不入库）
+config.yaml
+config.yaml.bak
+data/
 
-# Log files
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# Editor directories and files
-.idea
-.vscode
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# 向导记住的非机密值（issuer / client id / 回调地址 / 管理员 sub）
+.keycloak-setup.env

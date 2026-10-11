@@ -1,463 +1,356 @@
-<!-- 伪抽奖：固定排序，只随机抽取特效 -->
+<!--
+  大屏：公开直连，只负责显示。
+
+  推进由管理台控制 —— 这里 1.5 秒轮询一次状态，游标变了就播下一位、
+  跳过信号变了就跳过当前动画。名单在开轮时一次性预载，动画本身不依赖网络。
+-->
 <template>
   <div class="background"></div>
-  <RecruitAnimation ref="bangLottery" style="width: 100vh; height: 100vw;" :theme="theme"/>
-  <InfoDisplay ref="infoDisplay" :name="(typeof name === 'string') ? name : ''" :avatar-url="(typeof avatarUrl === 'string') ? avatarUrl : ''" :shumeiniang-image="shumeiniangImage"/>
-  <MultipleInfoDisplay ref="multiInfoDisplay" :name="Array.isArray(name) ? name : []" :avatar-url="Array.isArray(avatarUrl) ? avatarUrl : []" :shumeiniang-image="shumeiniangImage"/>
+  <RecruitAnimation ref="bangLottery" style="width: 100vh; height: 100vw;" :theme="theme" />
+  <InfoDisplay ref="infoDisplay" :name="name" avatar-url="" :shumeiniang-image="shumeiniangImage" />
 
-  <div class="ui-container" :hidden="!showUI">
-    <div class="bank-title">抽奖名单</div>
-    <div class="bank-container">
-      <div class="bank-tool-bar">
-        <button class="bank-tool-button" @click="uploadFile">导入文件</button>
-        <button class="bank-tool-button" @click="downloadBank">导出名单</button>
-        <button class="bank-tool-button" @click="clearBank">清空名单</button>
-        <button class="bank-tool-button" @click="pick" style="background-color: pink;">一发入魂</button>
-      </div>
-      <div style="text-align: center; color: gray;">
-        <input type="checkbox" v-model="autoRemove" id="autoRemoveCheckbox">
-        <label for="autoRemoveCheckbox">自动将中奖者移出名单</label>
-        <div style="margin-top: 10px;">
-          当前名单有{{ bank.length }}人
-          <label for="drawCount">抽取人数：</label>
-          <input 
-            type="number" 
-            v-model.number="drawCount" 
-            id="drawCount" 
-            min="1" 
-            style="width: 60px; margin-left: 10px; margin-right: 10px;"
-          />
-          <label for="showCountSelect">展示方式：</label>
-          <select v-model.number="showCount" id="showCountSelect" style="width: 60px; margin-left: 10px; margin-right: 10px;">
-            <option value="1">一抽</option>
-            <option value="10">十连抽</option>
-          </select>
-
-          <label for="drawCount">随机种子：</label>
-          <input 
-            type="text" 
-            v-model="randomSeed" 
-            id="randomSeed" 
-            style="width: 60px; margin-left: 10px; margin-right: 10px;"
-          />
-        </div>
-      </div>
-      <div class="bank-inner-container">
-        <div v-if="bank.length === 0" style="width: 100%; text-align: center;">(空空如也~ 请点击上方按钮导入名单喵~)</div>
-        <div v-for="people, i in bank" v-bind:key="i" class="bank-item">{{ people.name }}</div>
-      </div>
-    </div>
+  <div v-if="!connected" class="banner">与服务器连接中断，正在重试…（若一直这样，刷新本页会重新登录）</div>
+  <div v-else-if="needsGesture" class="banner">
+    浏览器的自动播放被拦了：点一下屏幕或按任意键解锁，会自动重播这一位
   </div>
 
-  <div style="position: fixed; right: 20px; bottom: 20px; z-index: 999999999" v-show="!showUI && !playingAnim && (index === targets.length - 1)">
-    <button @click="returnToUI">返回</button>
-    <button @click="downloadResult">导出获奖名单</button>
+  <!-- 待机：人数 + 签到二维码 -->
+  <div v-if="!round" class="idle">
+    <h1 class="idle-title">破冰会抽奖</h1>
+    <p class="idle-count">已签到 <b>{{ count }}</b> 人</p>
+    <button class="fullscreen-btn" @click="enterFullscreen">点击进入全屏演示</button>
+    <img class="qr" :src="qrSrc" alt="签到二维码" />
+    <p class="idle-hint">扫码签到 · {{ checkinURL }}</p>
+    <p class="idle-hint">{{ signupOpen ? '签到开放中' : '签到已关闭' }}</p>
   </div>
-  
-  
-  <input 
-    type="file" 
-    ref="fileInput" 
-    accept=".txt .json" 
-    @change="handleFileUpload" 
-    style="display: none"
-  />
+
+  <!-- 抽奖中：左上角轮次信息 -->
+  <div v-else class="hud">
+    <div class="hud-label">{{ round.label || ('第 ' + round.no + ' 轮') }}</div>
+    <div class="hud-progress">{{ Math.max(round.revealedIndex + 1, 0) }} / {{ round.count }}</div>
+  </div>
 </template>
 
 <script>
-import RecruitAnimation from '@/components/RecruitAnimation.vue'; 
-import InfoDisplay from '@/components/InfoDisplay.vue';
-import MultipleInfoDisplay from '@/components/MultipleInfoDisplay.vue';
-import seededRandomIndex from '@/functions/seededRandomIndex';
+import RecruitAnimation from '@/components/RecruitAnimation.vue'
+import InfoDisplay from '@/components/InfoDisplay.vue'
+import { api } from '@/api'
 
-const AVAILABLE_SHUMEINIANG_IMAGES = [
-  "ice-cream",
-  "coffee",
-  "cake",
-  "bread",
-  "air-plane",
-];
-
-const AVAILABLE_THEMES = [
-  "BanGDream",
-  "GenshinImpact",
-  "PJSK",
-  "WutheringWaves",
-  "Arknights",
-  "StarRail"
-];
-
-
-
-const getRandom = (array) => {
-  return array[Math.floor(Math.random() * array.length)];
-};
+const POLL_MS = 1500
 
 export default {
-  name: 'App',
+  name: 'LotteryScreen',
   components: {
     RecruitAnimation,
-    InfoDisplay,
-    MultipleInfoDisplay
+    InfoDisplay
   },
   data() {
     return {
-      bank: [],
-      targets: [],
-
-      name: '', // 人员姓名
+      connected: true,
+      needsGesture: false,
+      signupOpen: false,
+      count: 0,
+      round: null,
+      entries: [],
       theme: '',
-      avatarUrl: '',
+      name: '',
       shumeiniangImage: '',
-
-      index: -1,
-      playingAnim: false,
-      fullScreen: false,
-
-      autoRemove: true,
-      drawCount: 1,
-      showCount: 1,
-      randomSeed: 'smn123',
-
-      showUI: true
+      playing: false,
+      prevIndex: -1,
+      prevSkip: 0,
+      loadedRound: 0,
+      stalledIndex: null,
+      watchdog: null,
+      timer: null,
+      checkinURL: window.location.origin + '/#/checkin'
+    }
+  },
+  computed: {
+    qrSrc() {
+      return api.qr(this.checkinURL)
     }
   },
   methods: {
-    uploadFile() {
-      this.$refs.fileInput.click();
+    async poll() {
+      let state
+      try {
+        state = await api.screenState()
+        this.connected = true
+      } catch (e) {
+        this.connected = false
+        return
+      }
+
+      this.signupOpen = state.signupOpen
+      this.count = state.participantCount
+
+      if (!state.round) {
+        if (this.round) this.resetStage()
+        this.round = null
+        this.entries = []
+        this.loadedRound = 0
+        return
+      }
+
+      if (state.round.no !== this.loadedRound) {
+        await this.loadRound()
+        if (!this.round) return
+      }
+      this.round = state.round
+      this.follow(state.round)
     },
-    clearBank() {
-      this.bank = [];
+
+    async loadRound() {
+      let round
+      try {
+        round = await api.screenRound()
+        this.connected = true
+      } catch (e) {
+        this.connected = false
+        return
+      }
+      this.entries = round.entries || []
+      this.loadedRound = round.no
+      this.round = round
+      // 就位不等于推进：先把画面清干净，再按当前游标直接摆好，不重放动画。
+      // 大屏中途刷新时靠这一步"无声"恢复到已经揭晓的那一位。
+      this.prevSkip = round.skipSeq
+      this.resetStage()
+      this.prevIndex = round.revealedIndex
+      if (round.revealedIndex >= 0) this.showIndex(round.revealedIndex, false)
     },
-    handleFileUpload(event) {
-      const file = event.target.files[0];
-      if (!file) return;
 
-      const reader = new FileReader();
+    follow(round) {
+      if (round.revealedIndex !== this.prevIndex) {
+        // 往前推进才播动画；回退时直接显示
+        const animate = round.revealedIndex > this.prevIndex
+        this.prevIndex = round.revealedIndex
+        this.showIndex(round.revealedIndex, animate)
+      }
+      if (round.skipSeq !== this.prevSkip) {
+        this.prevSkip = round.skipSeq
+        if (this.playing) this.skipAnimation()
+      }
+    },
 
-      reader.onload = (e) => {
-        const fileContent = e.target.result;
-        let people = [];
-        try {
-          people = JSON.parse(fileContent);
-        } catch(e) {
-          console.log(`Error occurred when trying to parse lottery info as json.`, e);
+    showIndex(index, animate) {
+      const person = this.entries[index]
+      if (!person) {
+        this.resetStage()
+        return
+      }
 
-          people = fileContent.split('\n').map((name) => {return {name: name}});
-        }
+      const self = this
+      if (!animate) {
+        this.clearWatchdog()
+        this.stalledIndex = null
+        this.$refs.bangLottery.reset()
+        this.playing = false
+        this.theme = person.theme
+        this.name = person.name
+        this.shumeiniangImage = person.shumeiniang
+        this.$nextTick(() => {
+          self.$refs.infoDisplay.display()
+        })
+        return
+      }
 
-        this.bank = [];
-        for (let person of people) {
-          if (!person.shumeiniangImage) {
-            person.shumeiniangImage = getRandom(AVAILABLE_SHUMEINIANG_IMAGES);
+      this.playing = true
+      this.$refs.infoDisplay.hide()
+      this.theme = person.theme
+      this.$nextTick(() => {
+        self.name = person.name
+        self.shumeiniangImage = person.shumeiniang
+        // RecruitAnimation.play() 只在视频 "ended" 时 resolve，而且它把
+        // 内部 play() 的拒绝自己吞了 —— 浏览器拦下自动播放时，外层既不会
+        // resolve 也不会 reject，整场就卡在黑屏上。所以自己上闹钟盯着。
+        self.clearWatchdog()
+        self.watchdog = window.setTimeout(() => {
+          const video = self.$refs.bangLottery.$refs.videoPlayer
+          if (video && video.paused) {
+            self.stalledIndex = index
+            self.needsGesture = true
+            self.playing = false
+            self.$refs.bangLottery.reset()
+            self.$refs.infoDisplay.display()
           }
-          if (!person.theme) {
-            person.theme = getRandom(AVAILABLE_THEMES);
-          }
-          this.bank.push(person);
-        }
-        
-      }
-      
-      reader.onerror = () => {
-        alert('文件读取失败');
-      }
-      
-      reader.readAsText(file);
-    },
-
-    enterFullscreen() {
-        const element = document.documentElement; // 整个页面全屏
-        const requestMethod =
-            element.requestFullscreen ||
-            element.webkitRequestFullscreen ||
-            element.mozRequestFullScreen ||
-            element.msRequestFullscreen;
-
-        if (requestMethod) {
-            requestMethod.call(element).catch((err) => {
-                console.warn("全屏失败:", err);
-                this.enableFullScreen = false; // 失败时重置状态
-            });
-        }
-    },
-
-    exitFullscreen() {
-        const exitMethod =
-            document.exitFullscreen ||
-            document.webkitExitFullscreen ||
-            document.mozCancelFullScreen ||
-            document.msExitFullscreen;
-
-        if (exitMethod) {
-            exitMethod.call(document);
-        }
-    },
-
-    displayLotteryAnim(person) {
-      let name, theme, avatarUrl, shumeiniangImage;
-      if (Array.isArray(person)) {
-        name = person.map((p) => p.name);
-        theme = person[0].theme;
-        avatarUrl = person.map((p) => p.avatarUrl);
-        shumeiniangImage = person[0].shumeiniangImage;
-      } else {
-        name = person.name;
-        theme = person.theme;
-        avatarUrl = person.avatarUrl;
-        shumeiniangImage = person.shumeiniangImage
-      }
-
-      const self = this;
-      self.showUI = false;
-      self.playingAnim = true;
-      self.$refs.infoDisplay.hide();
-      self.$refs.multiInfoDisplay.hide();
-      self.theme = theme;
-      self.$nextTick(() => {
-        self.name = name;
-        self.avatarUrl = avatarUrl;
-        self.shumeiniangImage = shumeiniangImage;
-        
-        self.$refs.bangLottery.play()
+        }, 1500)
+        self.$refs.bangLottery
+          .play()
           .then(() => {
-            if (Array.isArray(name)) {
-              self.$refs.multiInfoDisplay.display();
-            } else {
-              self.$refs.infoDisplay.display();
-            }
-            self.playingAnim = false;
-          });
-        }
-      );
+            self.clearWatchdog()
+            self.$refs.infoDisplay.display()
+            self.playing = false
+          })
+          .catch(() => {
+            self.clearWatchdog()
+            self.stalledIndex = index
+            self.needsGesture = true
+            self.playing = false
+            self.$refs.infoDisplay.display()
+          })
+      })
+    },
+
+    clearWatchdog() {
+      if (this.watchdog) {
+        window.clearTimeout(this.watchdog)
+        this.watchdog = null
+      }
+    },
+
+    // 第一次交互就解锁自动播放（Chrome 规则：文档上有过一次用户手势之后
+    // 才允许带声音的自动播放）。被拦下的那一位顺手重播，现场不用回退再前进。
+    onFirstGesture() {
+      this.needsGesture = false
+      const stalled = this.stalledIndex
+      this.stalledIndex = null
+      if (stalled !== null && stalled >= 0 && stalled === this.prevIndex) {
+        this.showIndex(stalled, true)
+      }
+    },
+
+    onFullscreenKey(e) {
+      if (e.key === 'f' || e.key === 'F') this.enterFullscreen()
     },
 
     skipAnimation() {
-      this.$refs.bangLottery.reset();
-      if (Array.isArray(this.name)) {
-        this.$refs.multiInfoDisplay.display();
-      } else {
-        this.$refs.infoDisplay.display();
-      }
-      this.playingAnim = false;
+      this.clearWatchdog()
+      this.stalledIndex = null
+      this.$refs.bangLottery.reset()
+      this.$refs.infoDisplay.display()
+      this.playing = false
     },
 
-    pick() {
-      if (this.bank.length === 0) {
-        alert("名单为空！");
-        return;
-      } else if (this.bank.length < this.drawCount) {
-        alert("名单人数少于抽取人数！");
-        return;
-      }
-
-      const seed = "testSeed001"; // TODO: Set seed by user
-      const indexArray = seededRandomIndex(this.bank, this.drawCount, seed);
-      const draws = indexArray.map((i) => this.bank[i]);
-
-      if (this.autoRemove) {
-        // 按降序排序 indexArray，避免删除元素后索引变化的影响
-        const sortedIndices = [...indexArray].sort((a, b) => b - a);
-        for (const index of sortedIndices) {
-          this.bank.splice(index, 1);
-        }
-      }
-
-      if (this.showCount === 1) {
-        this.targets = draws;
-        this.index = -1;
-      } else {
-        const groupedDraws = [];
-        for (let i = 0; i < draws.length; i += this.showCount) {
-          groupedDraws.push(draws.slice(i, i + this.showCount));
-        }
-        this.targets = groupedDraws;
-        this.index = -1;
-      }
-
-      // 发送一个模拟下箭头按键被按下的事件
-      const downArrowEvent = new KeyboardEvent('keydown', {
-        key: 'ArrowDown',
-        code: 'ArrowDown',
-        keyCode: 40,
-        which: 40,
-        bubbles: true,
-        cancelable: true
-      });
-      document.dispatchEvent(downArrowEvent);
+    resetStage() {
+      this.clearWatchdog()
+      this.$refs.bangLottery.reset()
+      this.$refs.infoDisplay.hide()
+      this.playing = false
+      this.theme = ''
+      this.name = ''
+      this.shumeiniangImage = ''
     },
 
-    returnToUI() {
-      this.$refs.bangLottery.reset();
-      this.$refs.infoDisplay.hide();
-      this.$refs.multiInfoDisplay.hide();
-      this.showUI = true;
-    },
-
-    downloadResult() {
-      // 下载抽奖结果
-      const result = [];
-      for (let target of this.targets) {
-        if (Array.isArray(target)) {
-          for (let person of target) {
-            result.push(person.name);
-          }
-        } else {
-          result.push(target.name);
-        }
+    enterFullscreen() {
+      const element = document.documentElement
+      const request =
+        element.requestFullscreen ||
+        element.webkitRequestFullscreen ||
+        element.mozRequestFullScreen ||
+        element.msRequestFullscreen
+      if (request) {
+        request.call(element).catch(() => {
+          // 手动按 F 也能进全屏
+        })
       }
-
-      const text = result.join('\n');
-      const blob = new Blob([text], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'lottery_result.txt';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    },
-
-    downloadBank() {
-      // 下载抽奖结果
-      const result = [];
-      for (let person of this.bank) {
-        result.push(person.name);
-      }
-
-      const text = result.join('\n');
-      const blob = new Blob([text], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'bank.txt';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // 这次点击同时解锁后续的自动播放
+      this.needsGesture = false
     }
   },
   mounted() {
-    document.addEventListener('keydown', (e) => {
-      if (e.key === " ") {
-        this.skipAnimation();
-      }
-      if (e.key === "ArrowDown") {
-        if (this.playingAnim) {
-          this.skipAnimation();
-        } else {
-          if (this.index + 1 >= this.targets.length) return;
-          this.index += 1;
-          const person = this.targets[this.index];
-          this.displayLotteryAnim(person);
-        }
-      } else if (e.key === "ArrowUp") {
-        if (this.index - 1 < 0) return;
-        this.index -= 1;
-        const person = this.targets[this.index];
-        this.displayLotteryAnim(person);
-      }
-    });
+    this.poll()
+    this.timer = window.setInterval(this.poll, POLL_MS)
 
-    document.addEventListener('keydown', (e) => {
-      // 进入/退出全屏
-      if (e.key === 'f' || e.key === 'F') {
-        try {
-          if (this.fullScreen) {
-            this.exitFullscreen();
-            this.fullScreen = false;
-          } else {
-            this.enterFullscreen();
-            this.fullScreen = true;
-          }
-        } catch(e) {
-          console.log("It seems you toggled full screen mode manually. Press key 'f' instead.");
-        }
-      }
-    });
+    document.addEventListener('pointerdown', this.onFirstGesture)
+    document.addEventListener('keydown', this.onFirstGesture)
+    document.addEventListener('keydown', this.onFullscreenKey)
+  },
+  unmounted() {
+    if (this.timer) window.clearInterval(this.timer)
+    this.clearWatchdog()
+    document.removeEventListener('pointerdown', this.onFirstGesture)
+    document.removeEventListener('keydown', this.onFirstGesture)
+    document.removeEventListener('keydown', this.onFullscreenKey)
   }
 }
 </script>
 
 <style>
 .background {
-  width: 100vw;
-  height: 100vh;
-  top: 0;
-  left: 0;
+  position: fixed;
+  inset: 0;
   margin: 0;
   background-size: cover;
   background-image: url("@/assets/bg0.jpeg");
 }
 
-.ui-container {
+.idle {
   position: fixed;
-  width: 100vw;
-  height: 100vh;
-  top: 0;
-  left: 0;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.2rem;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+.idle-title {
+  font-size: 3.5rem;
+  margin: 0;
+  letter-spacing: 0.08em;
+}
+
+.idle-count {
+  font-size: 2rem;
   margin: 0;
 }
 
-.bank-container {
-  padding-top: 10px;
-  position: relative;
-  margin-left: 10vw;
-  width: 80vw;
-  top: 10%;
-  height: 90%;
-  background: white;
-  border-radius: 20px 20px 0 0;
+.idle-count b {
+  font-size: 3rem;
+  color: #ffe066;
 }
 
-.bank-title {
-  margin-top: 10vh;
-  width: 100%;
-  text-align: center;
-  color: white;
-  font-size: 5rem;
+.qr {
+  width: 18rem;
+  height: 18rem;
+  background: #fff;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
 }
 
-.bank-tool-bar {
-  position: relative;
-  width: 80%;
-  height: 5vh;
-  text-align: center;
-  display: flex;
-  justify-content: center;
-  margin-left: 10%;
-  margin-top: 15px;
-  margin-bottom: 5px;
-  color: black;
+.idle-hint {
+  margin: 0;
+  font-size: 1.1rem;
+  opacity: 0.9;
+}
+
+.fullscreen-btn {
+  font-size: 1.1rem;
+  padding: 0.6rem 1.4rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  cursor: pointer;
+}
+
+.hud {
+  position: fixed;
+  top: 1.5rem;
+  left: 2rem;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
   font-size: 2rem;
 }
 
-.bank-tool-button {
-  width: 20%;
-  margin-left: 2%;
-  margin-right: 2%;
+.hud-progress {
+  font-size: 1.25rem;
+  opacity: 0.85;
 }
 
-.bank-inner-container {
-  position: relative;
-  width: 100%;
-  height: 55%;
-  overflow-y: scroll;
-}
-
-.bank-item {
-  position: relative;
-  width: 80%;
-  height: 10vh;
+.banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 0.5rem;
   text-align: center;
-  margin-left: 10%;
-  margin-top: 15px;
-  margin-bottom: 5px;
-  color: black;
-  font-size: 2rem;
-  border: 1px solid black;
-  border-radius: 10px;
+  background: #c0392b;
+  color: #fff;
+  font-size: 1rem;
+  z-index: 10;
 }
-
 </style>

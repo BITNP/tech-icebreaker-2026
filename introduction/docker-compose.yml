@@ -1,0 +1,29 @@
+# 部署单文件：app + 反向代理（Traefik 以 label 发现，网络已存在，不由本文件管理）。
+#
+# 使用：
+#   1. 在本目录放 config.yaml（现场配置，不入库）：
+#        cp config.example.yaml config.yaml && $EDITOR config.yaml
+#      注意 auth.oidc.redirect_url 必须与 Keycloak client 里登记的地址完全一致。
+#   2. podman-compose up -d
+#
+# 现场也可以不跑容器：直接 ./icebreaker -config config.yaml，一样是单文件 + SQLite。
+services:
+  app:
+    image: ghcr.io/bitnp/icebreaker:latest
+    build: .
+    volumes:
+      # 配置和数据库都在宿主机上，重建容器不丢签到名单。
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/app/data
+    restart: "on-failure:10"
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.icebreaker.rule: "Host(`icebreaker.bit-staging.bitnp.net`)"
+      traefik.http.routers.icebreaker.tls: "true"
+      traefik.http.services.icebreaker.loadbalancer.server.port: "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
